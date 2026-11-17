@@ -1,0 +1,78 @@
+name: Árukereső feed frissítése
+
+on:
+  schedule:
+    # minden nap 13:37 UTC = 14:37 (téli idő) / 15:37 (nyári idő) Budapesten –
+    # az Árukereső 16:00-kor tölti le a feedet
+    - cron: "37 13 * * *"
+  workflow_dispatch: {}   # kézi indítás: Actions fül → "Run workflow"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: arukereso-feed
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Függőségek
+        run: pip install requests pillow
+
+      - name: Termékek letöltése a Shoprenter API-ból
+        env:
+          SHOPRENTER_CLIENT_ID: ${{ secrets.SHOPRENTER_CLIENT_ID }}
+          SHOPRENTER_CLIENT_SECRET: ${{ secrets.SHOPRENTER_CLIENT_SECRET }}
+        run: python fetch_api.py --raw raw --env /dev/null
+
+      - name: Árukereső XML generálása (kép-, URL- és árellenőrzéssel)
+        run: python arukereso_feed.py --raw raw --out site --check-urls
+
+      - name: Biztonsági ellenőrzés (legalább 50 termék, érvényes XML)
+        run: |
+          python - <<'EOF'
+          import sys, xml.etree.ElementTree as ET
+          n = len(ET.parse("site/arukereso.xml").getroot())
+          print(f"Termékek a feedben: {n}")
+          if n < 50:
+              sys.exit("Túl kevés termék – a feed NEM frissül, a tegnapi változat marad kint.")
+          EOF
+
+      - name: Riport a futás összefoglalójába
+        if: always()
+        run: |
+          if [ -f site/arukereso_riport.txt ]; then
+            { echo '```'; cat site/arukereso_riport.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Kezdőoldal
+        run: |
+          cat > site/index.html <<'EOF'
+          <!doctype html><meta charset="utf-8"><title>Pannon-Theta feed</title>
+          <p><a href="arukereso.xml">arukereso.xml</a> · <a href="arukereso_riport.txt">riport</a></p>
+          EOF
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
