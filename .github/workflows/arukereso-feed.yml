@@ -6,6 +6,8 @@ on:
     # az Árukereső 16:00-kor tölti le a feedet
     - cron: "37 13 * * *"
   workflow_dispatch: {}   # kézi indítás: Actions fül → "Run workflow"
+  push:                   # a szabályok / nevek módosítása után azonnal frissül
+    branches: [main]
 
 permissions:
   contents: read

@@ -353,6 +353,9 @@ class Builder:
             gross = to_int(pr.get("grossSpecial") or pr.get("gross"))
             net = to_int(pr.get("netSpecial") or pr.get("net"))
             min_qty = max(1, to_int(p.get("minimalOrderNumber")))
+            if min_qty > 1:
+                skip(f"minimum {min_qty} db rendelhető – nem kerül a feedbe")
+                continue
             if gross <= 0:
                 skip("nincs ár")
                 continue
