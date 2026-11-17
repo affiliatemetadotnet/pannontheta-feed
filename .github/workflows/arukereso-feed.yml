@@ -1,4 +1,4 @@
-name: Árukereső feed frissítése
+name: Árukereső feed frissítése 
 
 on:
   schedule:
